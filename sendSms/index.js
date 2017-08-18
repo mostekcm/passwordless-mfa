@@ -4,48 +4,40 @@ import express from 'express';
 import { fromExpress } from 'webtask-tools';
 import bodyParser from 'body-parser';
 import Bandwidth from 'node-bandwidth';
-const app = express();
+import jwt from 'jsonwebtoken';
 
-app.use(bodyParser.json());
-
-const jwt = require('express-jwt');
-
-app.use((req, res, next) => {
-  const issuer = 'https://' + req.webtaskContext.secrets.AUTH0_DOMAIN + '/';
-  jwt({
-    secret: req.webtaskContext.secrets.SIGNING_SECRET,
-    audience: req.webtaskContext.secrets.AUDIENCE,
-    subject: 'urn:Auth0',
-    issuer: issuer,
-    algorithms: [ 'HS256' ]
-  })(req, res, next);
-});
-
-app.get('/test', (req, res) => {
-  // test endpoint, no-operation
-  res.send(200);
-});
-
-app.get('/', (req, res) => {
+module.exports = (ctx, cb) => {
   // add your logic, you can use scopes from req.user
-  const client = new Bandwidth({
-    userId: req.webtaskContext.secrets.BANDWIDTH_USER_ID,
-    apiToken: req.webtaskContext.secrets.BANDWIDTH_TOKEN,
-    apiSecret: req.webtaskContext.secrets.BANDWIDTH_SECRET
-  });
-  client.Message.send({
-    from: req.query.sender,
-    to: req.query.recipient,
-    text: req.query.body
-  })
-    .then(function(message) {
-      console.log('message sent with id ', message.id);
-      res.json({ message: 'OK' });
-    })
-    .catch(function(err) {
-      console.error('Caught error trying to send message: ', err.message);
-      res.send(500);
-    })
-});
+  const token = ctx.headers.authorization ? ctx.headers.authorization.split(' ')[1] : undefined;
 
-module.exports = fromExpress(app);
+  if (!token) return cb(new Error('unauthorized'));
+
+  try {
+    const decoded = jwt.verify(token, ctx.secrets.SIGNING_SECRET, {
+      audience: ctx.secrets.AUDIENCE,
+      issuer: 'Auth0',
+      subject: `urn:Auth0`
+    });
+
+    const client = new Bandwidth({
+      userId: ctx.secrets.BANDWIDTH_USER_ID,
+      apiToken: ctx.secrets.BANDWIDTH_TOKEN,
+      apiSecret: ctx.secrets.BANDWIDTH_SECRET
+    });
+    client.Message.send({
+      from: ctx.body.sender,
+      to: ctx.body.recipient,
+      text: ctx.body.body
+    })
+      .then(function(message) {
+        console.log('message sent with id ', message.id);
+        return cb(null, { message: 'OK' });
+      })
+      .catch(function(err) {
+        console.error('Caught error trying to send message: ', err.message);
+        return cb(err);
+      })
+  } catch(err) {
+    return cb(err);
+  }
+}
