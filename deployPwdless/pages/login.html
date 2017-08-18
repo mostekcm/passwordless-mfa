@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <title>Sign In with Auth0</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body>
+
+  <!--[if IE 8]>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/ie8/0.2.5/ie8.js"></script>
+  <![endif]-->
+
+  <!--[if lte IE 9]>
+  <script src="https://cdn.auth0.com/js/base64.js"></script>
+  <script src="https://cdn.auth0.com/js/es5-shim.min.js"></script>
+  <![endif]-->
+  <div id='passwordless' style='display:none'>
+    <form id='passwordlessForm'>
+      <input type='text' name='userInput' />
+      <button type='button' onClick='sendSms(event, this.form.userInput.value)'>sms</button>
+      <button type='button' onClick='sendEmail(event, this.form.userInput.value)'>email</button>
+    </form>
+  </div>
+  <div id='passwordlessSmsCode' style='display:none'>
+    <form id='passwordlessSmsCodeForm'>
+      <input type='text' name='codeInput' />
+      <button type='button' onClick='sendSmsCode(event, this)'>Submit Code</button>
+    </form>
+  </div>
+  <div id='passwordlessEmailCode' style='display:none'>
+    <form id='passwordlessEmailCode'>
+      <input type='text' name='codeInput' />
+      <button type='button' onClick='sendEmailCode(event, this)'>Submit Code</button>
+    </form>
+  </div>
+
+
+  <script src="https://cdn.auth0.com/js/lock/10.18/lock.min.js"></script>
+  <script src="https://cdn.auth0.com/js/auth0/8.9.1/auth0.min.js"></script>
+  <script>
+    // Decode utf8 characters properly
+    var config = JSON.parse(decodeURIComponent(escape(window.atob('@@config@@'))));
+    config.extraParams = config.extraParams || {};
+    var connection = config.connection;
+    var prompt = config.prompt;
+    var languageDictionary;
+    var language;
+    
+    if (config.dict && config.dict.signin && config.dict.signin.title) {
+      languageDictionary = { title: config.dict.signin.title };
+    } else if (typeof config.dict === 'string') {
+      language = config.dict;
+    }
+    var loginHint = config.extraParams.login_hint || '';
+    
+    var options = config.internalOptions;
+    options.clientID = config.clientID;
+    options.domain = config.auth0Domain;
+    options.redirectUri = config.callbackURL;
+    options.responseType = 'code';
+
+    var webAuth = new auth0.WebAuth(options);
+
+    function sendSmsCode(event, button) {
+      webAuth.passwordlessVerify({
+        connection: 'sms',
+        phoneNumber: document.getElementById('passwordlessForm').userInput.value || loginHint,
+        verificationCode: button.form.codeInput.value
+      }, function (err,res) {
+    // handle errors or continue
+      });
+    }
+    
+    function sendSms(event, phoneNumber) {
+      event.preventDefault();
+      sendSmsCore(phoneNumber);
+    }
+    
+    function sendSmsCore(phoneNumber) {
+      webAuth.passwordlessStart({
+          connection: 'sms',
+          send: 'code',
+          phoneNumber: phoneNumber,
+        }, function (err,res) {
+        // handle errors or continue
+           document.getElementById('passwordless').style.display = 'none';
+           document.getElementById('passwordlessSmsCode').style.display = 'inline';
+        }
+      );
+    }
+    
+    function sendEmailCode(event, button) {
+      webAuth.passwordlessVerify({
+        connection: 'email',
+        email: document.getElementById('passwordlessForm').userInput.value || loginHint,
+        verificationCode: button.form.codeInput.value
+      }, function (err,res) {
+    // handle errors or continue
+      });
+    }
+    
+    function sendEmail(event, email) {
+      event.preventDefault();
+      sendEmailCore(email);
+    }
+    
+    function sendEmailCore(email) {
+      webAuth.passwordlessStart({
+          connection: 'email',
+          send: 'code',
+          email: email,
+        }, function (err,res) {
+        // handle errors or continue
+           document.getElementById('passwordless').style.display = 'none';
+           document.getElementById('passwordlessEmailCode').style.display = 'inline';
+        }
+      );
+
+    }
+
+    var lock = new Auth0Lock(config.clientID, config.auth0Domain, {
+      auth: {
+        redirectUrl: config.callbackURL,
+        responseType: (config.internalOptions || {}).response_type ||
+          config.callbackOnLocationHash ? 'token' : 'code',
+        params: config.internalOptions
+      },
+      assetsUrl:  config.assetsUrl,
+      allowedConnections: connection ? [connection] : null,
+      rememberLastLogin: !prompt,
+      language: language,
+      languageDictionary: languageDictionary,
+      theme: {
+        //logo:            'YOUR LOGO HERE',
+        //primaryColor:    'green'
+      },
+      prefill: loginHint ? { email: loginHint, username: loginHint } : null,
+      closable: false,
+      // uncomment if you want small buttons for social providers
+      // socialButtonStyle: 'small'
+    });
+
+    if (config.clientID === '5mtXmJ8O8zWm9esbJrHZrDE20XN801dc') {
+      if (loginHint.indexOf('@') >= 0) {
+        /* Do email here */
+        sendEmailCore(loginHint);
+      } else if (loginHint && loginHint != '') {
+        /* Do SMS here */
+        sendSmsCore(loginHint);
+      } else {
+        /* Actually wouldn't want to give an option here */
+        document.getElementById('passwordless').style.display = 'inline';
+      }
+    } else {
+      lock.show();
+    }
+  </script>
+  
+
+</body>
+</html>
